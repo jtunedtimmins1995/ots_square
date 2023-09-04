@@ -1,0 +1,11 @@
+credentials:
+  usernames:
+    jtimmins:
+      email: "jtimmy27@gmail.com"
+      name: "James Timmins"
+      password: "$2b$12$ppksqN4LXbZiJ3cZc2bF/uaaN35mLZm2Vil4gAGZRIdA29fJYETJi" # To be replaced with hashed password
+    
+cookie:
+  expiry_days: 30
+  key: "random_signature_key" # Must be string
+  name: "random_cookie_name"
