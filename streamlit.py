@@ -26,7 +26,7 @@ with col2:
     st.title('OTs Square Automation')
 
 
-with open('/Users/james.timmins/Documents/OTs_square/st_creds.yaml', 'r') as file:
+with open('st_creds.yaml', 'r') as file:
     config = yaml.safe_load(file)
     
     authenticator = stauth.Authenticate(
