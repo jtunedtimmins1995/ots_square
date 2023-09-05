@@ -4,7 +4,7 @@ import numpy as np
 from google_sheets import *
 import streamlit_authenticator as stauth
 
-
+from boto import get_square_secret
 from square.client import Client
 import os
 import yaml
@@ -28,7 +28,7 @@ with col2:
 
 with open('/Users/james.timmins/Documents/OTs_square/st_creds.yaml', 'r') as file:
     config = yaml.safe_load(file)
-    print(config)
+    
     authenticator = stauth.Authenticate(
         config['credentials'],
         config['cookie']['name'],
@@ -72,7 +72,7 @@ if authentication_status:
         def get_payments(first_date, exist):
             
             client = Client(
-                access_token=os.environ['SQUARE_ACCESS_TOKEN'],
+                access_token=get_square_secret()['SQUARE_ACCESS_TOKEN'],
                 environment='production')
             
             orders_api = client.orders

@@ -18,7 +18,7 @@ scopes = ['https://www.googleapis.com/auth/spreadsheets',
 
 
 def get_spread_sheet(spreadsheet_id, spreadsheet_range):
-    global values_input, service
+    
     creds = Credentials.from_service_account_info(get_google_secret(), scopes=scopes)
     
 
@@ -46,13 +46,23 @@ def append_to_sheet(sheet_name, spreadhseet_id, df):
     gauth = GoogleAuth()
     drive = GoogleDrive(gauth)
 
-    # open a google sheet
-    gs = gc.open_by_key(spreadhseet_id)
-    # select a work sheet from its name
+    # # open a google sheet
+    service = build('sheets', 'v4', credentials=credentials)
+
+    # Call the Sheets API
+    sheet = service.spreadsheets()
+    SAMPLE_SPREADSHEET_ID_input = '1K_uXqI1eiguBMr0uH3Tu7xDzePAIi3uAsDrAWukyBq8'
+    SAMPLE_RANGE_NAME = 'Square Subs!A:G'
     df_values = df.values.tolist()
-    gs.values_append(sheet_name, {'valueInputOption': 'RAW'}, {'values': df_values})
+    data = {'values':df_values}
+    sheet.values().append(spreadsheetId=SAMPLE_SPREADSHEET_ID_input,
+                                range=SAMPLE_RANGE_NAME, body=data, valueInputOption='USER_ENTERED').execute()
+    # # select a work sheet from its name
+    
+    # sheet.values_append(sheet_name, {'valueInputOption': 'RAW'}, {'values': df_values})
 
 if __name__=='__main__':
     SAMPLE_SPREADSHEET_ID_input = '1K_uXqI1eiguBMr0uH3Tu7xDzePAIi3uAsDrAWukyBq8'
     SAMPLE_RANGE_NAME = 'Square Subs!A:G'
-    get_spread_sheet(SAMPLE_SPREADSHEET_ID_input, SAMPLE_SPREADSHEET_ID_input)
+    df=get_spread_sheet(SAMPLE_SPREADSHEET_ID_input, SAMPLE_SPREADSHEET_ID_input)
+    print(df.head(1))
