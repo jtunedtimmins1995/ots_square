@@ -7,6 +7,7 @@ from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
+from boto import get_google_secret
 
 import pandas as pd
 import os 
@@ -18,19 +19,8 @@ scopes = ['https://www.googleapis.com/auth/spreadsheets',
 
 def get_spread_sheet(spreadsheet_id, spreadsheet_range):
     global values_input, service
-    creds = None
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', scopes) # here enter the name of your downloaded JSON file
-            creds = flow.run_local_server(port=0)
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
+    creds = Credentials.from_service_account_info(get_google_secret(), scopes=scopes)
+    
 
     service = build('sheets', 'v4', credentials=creds)
 
@@ -48,7 +38,8 @@ def get_spread_sheet(spreadsheet_id, spreadsheet_range):
     return df
 
 def append_to_sheet(sheet_name, spreadhseet_id, df):
-    credentials = Credentials.from_service_account_file('ots_service.json', scopes=scopes)
+    
+    credentials = Credentials.from_service_account_info(get_google_secret(), scopes=scopes)
 
     gc = gspread.authorize(credentials)
 
@@ -60,3 +51,8 @@ def append_to_sheet(sheet_name, spreadhseet_id, df):
     # select a work sheet from its name
     df_values = df.values.tolist()
     gs.values_append(sheet_name, {'valueInputOption': 'RAW'}, {'values': df_values})
+
+if __name__=='__main__':
+    SAMPLE_SPREADSHEET_ID_input = '1K_uXqI1eiguBMr0uH3Tu7xDzePAIi3uAsDrAWukyBq8'
+    SAMPLE_RANGE_NAME = 'Square Subs!A:G'
+    get_spread_sheet(SAMPLE_SPREADSHEET_ID_input, SAMPLE_SPREADSHEET_ID_input)
