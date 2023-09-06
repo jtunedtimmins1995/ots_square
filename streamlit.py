@@ -23,7 +23,7 @@ with col1:
                 width=100, # Manually Adjust the width of the image as per requirement
             )
 with col2:
-    st.title('OTs Square Automation')
+    st.title("OT's M.O.R.R.i.$")
 
 
 with open('st_creds.yaml', 'r') as file:
