@@ -100,105 +100,113 @@ if authentication_status:
             },
         }
             
-            s_orders = orders_api.search_orders(body).body['orders']
-
+            s_orders = orders_api.search_orders(body)
             
+            if s_orders.is_success():
+                if len(s_orders.body)>0:
+                    s_orders=s_orders.body['orders']
 
-
-            result = invoices_api.list_invoices(
-                'SBBJSGR24YHYB'
-            )
-
-            invoices = pd.DataFrame(result.body['invoices'])
-
-            # i=1
-            while result.cursor:
-                # print(i)
-                # i+=1
-                result = invoices_api.list_invoices(
-                    'SBBJSGR24YHYB',
-                    cursor = result.cursor
-                )
-            invoices = pd.concat([invoices, pd.DataFrame(result.body['invoices'])])
-
-            orders_format = []
-            for i, order in enumerate(s_orders[:]):
                 
-                # print(i, '/', len(s_orders))
-                new_order = {}
-                
-                new_order['id']=get_value(order,'id')
-                new_order['created_at']=get_value(order,'updated_at')
-                
-                new_order['customer_id']=get_value(order,'customer_id')
-                
-                new_order['state']=get_value(order,'state')
 
-                new_order['tenders']=get_value(order,'tenders')
 
-                if not new_order['customer_id']:
-                    customer_ids = []
-                    try:
-                        for tender in order['tenders']:
-                            if get_value(tender,'customer_id'):
-                                customer_ids.append(get_value(tender,'customer_id'))
-                        new_order['customer_id'] = customer_ids[0]
-                    except:
-                        pass
+                    result = invoices_api.list_invoices(
+                        'SBBJSGR24YHYB'
+                    )
 
-                if new_order['customer_id']:
-                    customer = customers_api.retrieve_customer(new_order['customer_id'])
-                
-                    try:
-                        new_order['first_name'] = get_value(customer.body['customer'],'given_name')
-                        new_order['last_name'] = get_value(customer.body['customer'],'family_name')
-                    except:
-                        print(customer.body)
-                else:
-                    pass
-                    invoice = invoices[invoices['order_id']==new_order['id']]
-                    
-                    
-                    if len(invoice)>0:
-                        cust_id = list(invoice['primary_recipient'])[0]['customer_id']
-                        customer = customers_api.retrieve_customer(cust_id)
-                        try:
-                            new_order['first_name'] = get_value(customer.body['customer'],'given_name')
-                            new_order['last_name'] = get_value(customer.body['customer'],'family_name')
-                        except:
-                            print(customer.body)
+                    invoices = pd.DataFrame(result.body['invoices'])
+
+                    # i=1
+                    while result.cursor:
+                        # print(i)
+                        # i+=1
+                        result = invoices_api.list_invoices(
+                            'SBBJSGR24YHYB',
+                            cursor = result.cursor
+                        )
+                    invoices = pd.concat([invoices, pd.DataFrame(result.body['invoices'])])
+
+                    orders_format = []
+                    for i, order in enumerate(s_orders[:]):
                         
-                for item in order['line_items']:
-                    line_dict = new_order.copy()
-                    
-                    line_dict['variation_name']=get_value(item,'variation_name')
-                    line_dict['item_name']=get_value(item,'name')
-                    line_dict['note']=get_value(item,'note')
-                    line_dict['total_money']=item['total_money']['amount']/100
-                    orders_format.append(line_dict) 
+                        # print(i, '/', len(s_orders))
+                        new_order = {}
+                        
+                        new_order['id']=get_value(order,'id')
+                        new_order['created_at']=get_value(order,'updated_at')
+                        
+                        new_order['customer_id']=get_value(order,'customer_id')
+                        
+                        new_order['state']=get_value(order,'state')
+
+                        new_order['tenders']=get_value(order,'tenders')
+
+                        if not new_order['customer_id']:
+                            customer_ids = []
+                            try:
+                                for tender in order['tenders']:
+                                    if get_value(tender,'customer_id'):
+                                        customer_ids.append(get_value(tender,'customer_id'))
+                                new_order['customer_id'] = customer_ids[0]
+                            except:
+                                pass
+
+                        if new_order['customer_id']:
+                            customer = customers_api.retrieve_customer(new_order['customer_id'])
+                        
+                            try:
+                                new_order['first_name'] = get_value(customer.body['customer'],'given_name')
+                                new_order['last_name'] = get_value(customer.body['customer'],'family_name')
+                            except:
+                                print(customer.body)
+                        else:
+                            pass
+                            invoice = invoices[invoices['order_id']==new_order['id']]
+                            
+                            
+                            if len(invoice)>0:
+                                cust_id = list(invoice['primary_recipient'])[0]['customer_id']
+                                customer = customers_api.retrieve_customer(cust_id)
+                                try:
+                                    new_order['first_name'] = get_value(customer.body['customer'],'given_name')
+                                    new_order['last_name'] = get_value(customer.body['customer'],'family_name')
+                                except:
+                                    print(customer.body)
+                                
+                        for item in order['line_items']:
+                            line_dict = new_order.copy()
+                            
+                            line_dict['variation_name']=get_value(item,'variation_name')
+                            line_dict['item_name']=get_value(item,'name')
+                            line_dict['note']=get_value(item,'note')
+                            line_dict['total_money']=item['total_money']['amount']/100
+                            orders_format.append(line_dict) 
 
 
-            orders_df = pd.DataFrame(orders_format)
+                    orders_df = pd.DataFrame(orders_format)
 
-            orders_df['customer_name']= orders_df['first_name'] + ' ' + orders_df['last_name']
-            match_fees_export = orders_df[(orders_df['state'].isin(['COMPLETED','OPEN'])) & (orders_df['tenders'].notnull())][['id', 'created_at', 'variation_name','item_name', 'customer_name', 'total_money', 'note']]
-            # match_fees_export = match_fees_export[match_fees_export['tenders'].notnull()]
-
-
-            match_fees_export = match_fees_export[(match_fees_export['customer_name'].notnull()) | (match_fees_export['note'].notnull())]
+                    orders_df['customer_name']= orders_df['first_name'] + ' ' + orders_df['last_name']
+                    match_fees_export = orders_df[(orders_df['state'].isin(['COMPLETED','OPEN'])) & (orders_df['tenders'].notnull())][['id', 'created_at', 'variation_name','item_name', 'customer_name', 'total_money', 'note']]
+                    # match_fees_export = match_fees_export[match_fees_export['tenders'].notnull()]
 
 
-            match_fees_export = match_fees_export[(match_fees_export['item_name'].fillna('').str.lower().str.contains('sub'))|(match_fees_export['item_name'].fillna('').str.lower().str.contains('training'))]
+                    match_fees_export = match_fees_export[(match_fees_export['customer_name'].notnull()) | (match_fees_export['note'].notnull())]
 
-            match_fees_export.columns = exist.columns
 
-            mg = pd.merge(left=match_fees_export, right=exist, how='left', on='ID', suffixes=['', '_old'])
-            not_in = mg[mg['Date_old'].isnull()][exist.columns]
-            # print(match_fees_export)
-            not_in.fillna('NA', inplace=True)
-            not_in.sort_values('Date', inplace=True)
+                    match_fees_export = match_fees_export[(match_fees_export['item_name'].fillna('').str.lower().str.contains('sub'))|(match_fees_export['item_name'].fillna('').str.lower().str.contains('training'))]
 
-            return not_in
+                    match_fees_export.columns = exist.columns
+
+                    mg = pd.merge(left=match_fees_export, right=exist, how='left', on='ID', suffixes=['', '_old'])
+                    not_in = mg[mg['Date_old'].isnull()][exist.columns]
+                    # print(match_fees_export)
+                    not_in.fillna('NA', inplace=True)
+                    not_in.sort_values('Date', inplace=True)
+
+                    return not_in
+                else:
+                    return pd.DataFrame()
+            else:
+                return pd.DatFrame()
 
 
 
