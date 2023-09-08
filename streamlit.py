@@ -10,6 +10,9 @@ import os
 import yaml
 from yaml.loader import SafeLoader
 
+import uuid
+import datetime as dt
+
 col1, col2 = st.columns([1,5],gap='small')
 
 
@@ -249,6 +252,209 @@ if authentication_status:
 
     elif option == 'Generate Match Invoices':
         st.text(option)
+
+        SAMPLE_SPREADSHEET_ID_input = '1lalOwWx_GwUZgjG3WgyxZvirtT9GYDJ6t3dAuNimTLM'
+        SAMPLE_RANGE_NAME = 'OTPI Scores!A:V'
+
+        data_load_state = st.text('Loading Match History...')
+
+
+        opti_scores = get_spread_sheet(SAMPLE_SPREADSHEET_ID_input, SAMPLE_RANGE_NAME)
+
+        # Notify the reader that the data was successfully loaded.
+        data_load_state.text("Match History Loaded:")
+
+        match_weeks = ['-------']+list(opti_scores['Game Date'].drop_duplicates())
+
+        match_week = st.selectbox(
+            'Select Match Week:',
+            match_weeks)
+
+        if match_week!= '-------':
+            match_week_games = opti_scores[opti_scores['Game Date']==match_week]
+            teams = list(match_week_games['OT Team'].sort_values().drop_duplicates())
+
+            invoice_teams = st.multiselect(
+                'What teams do you want to generate invoices for:',
+                teams,
+                teams)
+            
+            invoices_to_raise = match_week_games[match_week_games['OT Team'].isin(invoice_teams)]
+
+
+            debt_state = st.text('Getting Current Debt...')
+            SAMPLE_SPREADSHEET_ID_input = '1K_uXqI1eiguBMr0uH3Tu7xDzePAIi3uAsDrAWukyBq8'
+            SAMPLE_RANGE_NAME = 'Overall Summary!B2:D1000'
+
+            matchday_debt = get_spread_sheet(SAMPLE_SPREADSHEET_ID_input, SAMPLE_RANGE_NAME)
+            matchday_debt = matchday_debt[matchday_debt['Name']!='']
+
+            
+
+            invoice_mg_1 = pd.merge(left=invoices_to_raise, right = matchday_debt, how = 'left', right_on='Name', left_on = 'Player Name')
+            invoice_mg_1['Match Day Debt'] = pd.to_numeric(invoice_mg_1['Match Day Debt'].str.replace('£', ''))
+            invoice_mg = invoice_mg_1[invoice_mg_1['Match Day Debt']>0]
+            #
+            invoice_mg=invoice_mg[['Player Name', 'OT Team', 'Game Date', 'Opposition Name', 'Amount Owed']]
+
+            debt_state.text('Invoices to raise:')
+
+            st.write(invoice_mg)
+
+            create_invoices = st.button('Create Invoices')
+
+            if create_invoices:
+                client = Client(
+                access_token=get_square_secret()['SQUARE_ACCESS_TOKEN'],
+                environment='production')
+
+                customers_api = client.customers
+
+                invoice_status = st.text('Getting Customer Info...')
+                result = customers_api.list_customers(
+    
+                )
+                customers = {str(cust.get('given_name')) + ' ' + str(cust.get('family_name')):cust.get('id') for cust in result.body['customers']}
+
+
+                i=1
+                while result.cursor:
+                    # print(i)
+                    i+=1
+                    result = customers_api.list_customers(
+                        cursor = result.cursor
+                    )
+                    customers2 = {str(cust.get('given_name')) + ' ' + str(cust.get('family_name')):cust.get('id') for cust in result.body['customers']}
+
+                    customers.update(customers2)
+                
+                customer_df=pd.DataFrame(data=[{'name':cust, 'id':customers[cust]} for cust in customers])
+
+                invoice_mg['match_inv_id']=range(0,len(invoice_mg))
+
+                id_mg = pd.merge(left = invoice_mg, right = customer_df, how= 'left', left_on = 'Player Name', right_on = 'name')
+
+                id_mg['Amount Owed']=pd.to_numeric(id_mg['Amount Owed'])
+
+
+                invoice_status.text('Creating Orders...')
+
+                orders_api = client.orders
+
+                new_orders = []
+
+                for i, row in id_mg.iterrows():
+                    print(i)
+                    amount = row['Amount Owed'] 
+                    body = {
+                        'order': {
+                            'location_id': 'SBBJSGR24YHYB',
+                            'reference_id': f'{uuid.uuid1()}',
+                            'line_items': [
+                                
+                                {
+                                    'quantity': '1',
+                                    'catalog_object_id': 'OKAX666RRB7XKNM6BJTRM6IM',
+                                    'base_price_money': {
+                                        'amount': amount*100,
+                                        'currency': 'GBP'
+                                    }
+                                }
+                            ]
+                        },
+                        'idempotency_key': f'{uuid.uuid1()}'
+                    }
+                    # print(body)
+                    
+                    result = orders_api.create_order(body)
+                    # print(result)
+                    obj_id=result.body['order']['id']
+
+                    new_orders.append({'Player Name':row['Player Name'], 'match_inv_id':row['match_inv_id'], 'obj_id':obj_id})
+                # st.write(pd.DataFrame(new_orders))
+                # st.write(id_mg)
+                order_mg= pd.merge(left = id_mg, right=pd.DataFrame(new_orders), how= 'left', on = ['Player Name', 'match_inv_id'])
+
+                invoice_status.text('Creating Invoices...')
+
+                invoices_api = client.invoices
+
+                invoices = []
+
+                for i, row in order_mg.iterrows():
+                    order_id = row['obj_id']
+                    cust_id = row['id']
+                    invoice_number = str(dt.datetime.now().date()) +f"_{row['OT Team']}"+f"_{row['obj_id']}_1"
+
+                    due_at =  str(dt.datetime.now().date() + dt.timedelta(days = 1))
+
+                    title = 'Match Subs ' + row['Game Date'] + ' vs ' + row['Opposition Name']
+
+                        
+                    body = {
+                    'invoice': {
+                        'location_id': 'SBBJSGR24YHYB',
+                        'order_id': f'{order_id}',
+                        'primary_recipient': {
+                            'customer_id': f'{cust_id}'
+                        },
+                        'payment_requests': [
+                            {
+                                'request_type': 'BALANCE',
+                                'due_date': due_at,
+                                'tipping_enabled': True,
+                                'automatic_payment_source': 'NONE',
+                                'reminders': [
+                                    {
+                                        'relative_scheduled_days': -1,
+                                        'message': 'Your Invoice is due'
+                                    }
+                                ]
+                            }
+                        ],
+                        'delivery_method': 'EMAIL',
+                        'invoice_number': invoice_number,
+                        'title': title,
+                        'description': title,
+                        'scheduled_at': due_at+'T10:00:00Z',
+                        'accepted_payment_methods': {
+                            'card': True,
+                            'square_gift_card': False,
+                            'bank_account': False,
+                            'buy_now_pay_later': False,
+                            'cash_app_pay': False
+                        },
+                        'sale_or_service_date': str(dt.datetime.now().date()),
+                        'store_payment_method_enabled': False
+                    },
+                    'idempotency_key': f'{uuid.uuid1()}'
+                    }
+
+                    result = invoices_api.create_invoice(body)
+                    # print(result)
+                    invidid=result.body['invoice']['id']
+                    invoices.append(invidid)
+
+
+                invoice_status.text('Publishing Invoices...')
+                results = []
+                for invidid in invoices:
+
+                    body = {
+                        'version': 0,
+                        'idempotency_key': f'{invidid}'
+                    }
+
+                    result = invoices_api.publish_invoice(
+                        invidid,
+                        body
+                    )
+                    results.append(result)
+
+                invoice_status.text('Publishing Created...')
+                st.write(results)
+
+        
 elif authentication_status == False:
     st.error('Username/password is incorrect')
 elif authentication_status == None:
