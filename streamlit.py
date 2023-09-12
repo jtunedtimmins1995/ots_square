@@ -540,9 +540,8 @@ if authentication_status:
             invoice_mg_1['Owed'] = pd.to_numeric(invoice_mg_1['Owed'].str.replace('£', '').str.replace('-', '0'))
 
             
-            invoice_mg = invoice_mg_1[invoice_mg_1['Training Debt']>0]
             invoice_mg = invoice_mg_1[invoice_mg_1['Owed']>0]
-            
+            invoice_mg = invoice_mg[invoice_mg['Training Debt']>0]
             owed_state.text('Players to Invoice...')
 
             invoice_mg=invoice_mg[['Name', 'Owed']]
