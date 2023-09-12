@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from google_sheets import *
 import streamlit_authenticator as stauth
+from PIL import Image
 
 from boto import get_square_secret
 from square.client import Client
@@ -16,17 +17,19 @@ import datetime as dt
 col1, col2 = st.columns([1,5],gap='small')
 
 
+image=Image.open("logo.png")
 
 
-
-
-with col1:   
+with col1:    
     st.image(
                 "https://oldthorntoniansfc.com/wp-content/uploads/2021/02/Old-Thorntonians-Crest-2014_150dpi.png",
                 width=100, # Manually Adjust the width of the image as per requirement
-            )
+            ) 
 with col2:
-    st.title("OT's M.O.R.R.i.$")
+    st.image(
+                image,
+                width=300, # Manually Adjust the width of the image as per requirement
+            )
 
 
 with open('st_creds.yaml', 'r') as file:
