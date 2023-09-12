@@ -14,22 +14,26 @@ from yaml.loader import SafeLoader
 import uuid
 import datetime as dt
 
-col1, col2 = st.columns([1,5],gap='small')
 
+
+col4, col5, col6 = st.columns(3, gap='small')
 
 image=Image.open("logo.png")
 
 
-with col1:    
+with col4:    
     st.image(
                 "https://oldthorntoniansfc.com/wp-content/uploads/2021/02/Old-Thorntonians-Crest-2014_150dpi.png",
                 width=100, # Manually Adjust the width of the image as per requirement
-            ) 
-with col2:
+            )
+with col5: 
     st.image(
                 image,
                 width=300, # Manually Adjust the width of the image as per requirement
             )
+with col6:
+    st.write('')
+
 
 
 with open('st_creds.yaml', 'r') as file:
