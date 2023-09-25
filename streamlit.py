@@ -399,8 +399,7 @@ if authentication_status:
                     cust_id = row['id']
                     invoice_number = str(dt.datetime.now().date()) +f"_{row['OT Team']}"+f"_{row['obj_id']}_1"
 
-                    due_at =  str(dt.datetime.now().date() + dt.timedelta(days = 3))
-                    schedule_at =  str(dt.datetime.now().date())
+                    due_at =  str(dt.datetime.now().date() + dt.timedelta(days = 1))
 
                     title = 'Match Subs ' + row['Game Date'] + ' vs ' + row['Opposition Name']
 
@@ -430,7 +429,7 @@ if authentication_status:
                         'invoice_number': invoice_number,
                         'title': title,
                         'description': title,
-                        'scheduled_at': schedule_at+'T10:00:00Z',
+                        'scheduled_at': due_at+'T10:00:00Z',
                         'accepted_payment_methods': {
                             'card': True,
                             'square_gift_card': False,
