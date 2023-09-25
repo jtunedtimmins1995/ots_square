@@ -135,7 +135,8 @@ if authentication_status:
                             'SBBJSGR24YHYB',
                             cursor = result.cursor
                         )
-                    invoices = pd.concat([invoices, pd.DataFrame(result.body['invoices'])])
+                        if 'invoices' in result.body.keys():
+                            invoices = pd.concat([invoices, pd.DataFrame(result.body['invoices'])])
 
                     orders_format = []
                     for i, order in enumerate(s_orders[:]):
