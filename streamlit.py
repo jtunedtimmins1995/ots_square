@@ -205,7 +205,7 @@ if authentication_status:
                     match_fees_export = match_fees_export[(match_fees_export['customer_name'].notnull()) | (match_fees_export['note'].notnull())]
 
 
-                    match_fees_export = match_fees_export[(match_fees_export['item_name'].fillna('').str.lower().str.contains('sub'))|(match_fees_export['item_name'].fillna('').str.lower().str.contains('training'))]
+                    match_fees_export = match_fees_export[(match_fees_export['item_name'].fillna('').str.lower().str.contains('sub'))|(match_fees_export['item_name'].fillna('').str.lower().str.contains('training'))|(match_fees_export['item_name'].fillna('').str.lower().str.contains('card'))]
 
                     match_fees_export.columns = exist.columns
 
