@@ -54,7 +54,7 @@ if authentication_status:
     st.write(f'Welcome *{name}*')
     option = st.selectbox(
         'Automation Type:',
-        ('Get New Payments', 'Generate Match Invoices', 'Generate Training Invoices'))
+        ('Get New Payments', 'Generate Match Invoices', 'Generate Training Invoices', 'Update OTPI'))
 
 
     if option == 'Get New Payments':
@@ -706,6 +706,168 @@ if authentication_status:
 
                 st.write('No Customer Details so Skipped:')
                 st.write(skipped)
+
+    elif option == 'Update OTPI':
+
+        if 'opti_state' not in st.session_state:
+            st.session_state['opti_state'] = 'opti_preparation'
+        
+        def change_mapping_dict(team):
+            if 'mapping_dict' not in st.session_state:
+                st.session_state['mapping_dict'] = {}
+            
+            st.session_state['mapping_dict'][int(team)]=st.session_state[f'mapping_{team}']
+
+        def update_comps(df):
+            df = df.copy()
+            df['OT Team']=pd.to_numeric(df['OT Team'])
+            comps_to_update = st.session_state['mapping_dict']
+            comps_df=pd.DataFrame(data=[[key, comps_to_update[key]] for key in comps_to_update], columns = ['OT Team', 'new_comp'])
+            mg=pd.merge(left=df, right=comps_df, how='left', on=['OT Team'])
+            mg.loc[mg['new_comp'].notnull(),'Competition']=mg.loc[mg['new_comp'].notnull(),'new_comp']
+
+            return mg
+        
+        def upload_button():
+            st.session_state['to_append'] = to_append
+            st.session_state['opti_state'] = 'opti_upload'
+        
+        SAMPLE_SPREADSHEET_ID_input = '1lalOwWx_GwUZgjG3WgyxZvirtT9GYDJ6t3dAuNimTLM'
+        if st.session_state['opti_state'] == 'opti_preparation':
+            if 'md_sheets' not in st.session_state:
+                
+                SHEETS = ['1s Sheet!A1:AA17','2s Sheet!A1:AA17','3s Sheet!A1:AA17','4s Sheet!A1:AA17','5s Sheet!A1:AA17','6s Sheet!A1:AA17','Vets!A1:AA17']
+
+                dfs=[get_spread_sheet(SAMPLE_SPREADSHEET_ID_input, sheet) for sheet in SHEETS]
+                df = pd.concat(dfs)
+                df=df[df['Check']=='TRUE']
+                df=df[df['Position']!='']
+                st.session_state['md_sheets']=df
+            
+            else:
+                df = st.session_state['md_sheets']
+
+            st.write('These Weeks Stats:')
+            st.dataframe(df)
+
+            st.write('Team Filled In Quick Check')
+            st.dataframe(df.groupby(['OT Team'])['Position'].count())
+
+            df['Competition']=df['Competition'].apply(lambda x: 'Cup' if 'cup' in x.lower() else x)
+            comps=df[['OT Team', 'Competition']].drop_duplicates()
+
+            st.write('Comps')
+            st.dataframe(comps)
+
+            if len(df[df['Competition']==''])>0:
+                empty = df[df['Competition']=='']
+                teams = list(empty['OT Team'].drop_duplicates())
+                for i, row in comps.iterrows():
+                    team = row['OT Team']
+                    st.text_input(label=f'{team} competition', value=row['Competition'], on_change=change_mapping_dict, args=team, key=f'mapping_{team}')
+                    
+                if st.button(label = 'Update Comps'):
+                    
+                    df = update_comps(df)
+                    st.session_state['md_sheets']=df
+                    
+            
+            if len(df[df['Competition']==''])==0:
+                comps=df[['OT Team', 'Competition']].drop_duplicates()
+
+                st.write('Updated Comps')
+                st.dataframe(comps)
+
+                df['Match Date']=pd.to_datetime(df['Match Date']).apply(lambda x:x.strftime('%d %b'))
+                df['identifier']=df['Match Date']+'-'+df['OT Team'].astype(str)
+
+                SHEET = 'OTPI Scores!A:AC'
+                opti_db = get_spread_sheet(SAMPLE_SPREADSHEET_ID_input, SHEET)
+                opti_db['identifier']=opti_db['Game Date']+'-'+opti_db['OT Team']
+                mg=pd.merge(left=opti_db, right=df, how='outer', on=['identifier'], suffixes=['_db', ''])
+                to_append=mg[mg['Game Date'].isnull()][df.columns]
+
+                
+
+                curr_rows=len(opti_db)+1
+
+                opti_formula='''=2+ (P{rn}*'Scoring System'!$B$3)+ (IF(OR(D{rn}="DEF",D{rn}="GK"),N{rn}*'Scoring System'!$B$4,IF(D{rn}="MID",N{rn}*'Scoring System'!$B$5,0)))+ (IF(OR(D{rn}="DEF",D{rn}="GK"),H{rn}*'Scoring System'!$B$6,IF(D{rn}="MID",H{rn}*'Scoring System'!$B$7,IF(D{rn}="ATT",H{rn}*'Scoring System'!$B$8,0))))+ IF(AND(OR(D{rn}="GK",D{rn}="DEF"),J{rn}>=3),1*'Scoring System'!$B$9,0)+ (I{rn}*'Scoring System'!$B$10)+ (K{rn}*'Scoring System'!$B$11)+ (M{rn}*'Scoring System'!$B$12)+ (L{rn}*'Scoring System'!$B$13)+ (O{rn}*'Scoring System'!$B$14)+ (Q{rn}*'Scoring System'!$B$15)+ (R{rn}*'Scoring System'!$B$16)'''
+                missing_formula='''=IFERROR(match(C{rn},'Match Day Fees'!$B$2:$B$999,0),0)=0'''
+                week_formula='''=IF(max(A:A)=A{rn},1,0)'''
+
+                to_append['row']=range(len(to_append))
+                to_append['row']=to_append['row']+curr_rows+1
+
+                to_append['OPTI Score']=to_append['row'].apply(lambda x: opti_formula.format(rn=x))
+                to_append['Missing']=to_append['row'].apply(lambda x: missing_formula.format(rn=x))
+                to_append['This Week']=to_append['row'].apply(lambda x: week_formula.format(rn=x))
+
+                to_append['Game Date']=to_append['Match Date']
+
+                cols = ['Game Date',
+                        'Competition',
+                        'Player Name',
+                        'Position',
+                        'OT Team',
+                        'Opposition Name',
+                        'Result',	
+                        'Goals',	
+                        'Assists',	
+                        'Goals Conceded',	
+                        'Yellow Cards',	
+                        'Sin Bin',	
+                        'Red Cards',	
+                        'Clean Sheet?',	
+                        'Penalties Missed',	
+                        'Penalties Saved',	
+                        'Own Goals',	
+                        'MOTM?',	
+                        'Kit',	
+                        'Amount Owed',	
+                        'Match day rating',	
+                        'Comments',	
+                        'Formation',	
+                        'Team Report',	
+                        'Score for',
+                        'Score against',
+                        'OPTI Score',
+                        'Missing',
+                        'This Week'
+                ]
+
+                to_append=to_append[cols].copy()
+
+                position_map = {
+                    'GK':'GK',
+                    'CB':'DEF',
+                    'RWB':'DEF',
+                    'LWB':'DEF',
+                    'CM':'MID',
+                    'CF':'ATT',
+                    'RCB':'DEF',
+                    'LCB':'DEF',
+                    'LW':'ATT',
+                    'RW':'ATT',
+                    'RB':'DEF',
+                    'DCM':'MID',
+                    'LB':'DEF',
+                    'ACM':'MID'
+                    ,'':''
+                    }
+                to_append['Position']=to_append['Position'].apply(lambda x: position_map[x])
+
+                st.write('Data to Add')
+                st.dataframe(to_append)
+                # to_append['Position'].drop_duplicates()
+                # to_append[to_append['Position']=='']
+                st.button(label='Add To OPTI', on_click = upload_button)
+                    
+
+        if st.session_state['opti_state'] == 'opti_upload':
+            result=append_to_sheet_temp('OTPI Scores!A:AC', SAMPLE_SPREADSHEET_ID_input, st.session_state['to_append'])
+            st.text('Data Added')
+            st.dataframe(st.session_state['to_append'])
+                
 
         
 elif authentication_status == False:
