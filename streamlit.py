@@ -54,7 +54,7 @@ if authentication_status:
     st.write(f'Welcome *{name}*')
     option = st.selectbox(
         'Automation Type:',
-        ('Get New Payments', 'Generate Match Invoices', 'Generate Training Invoices', 'Update OTPI'))
+        ('Get New Payments', 'Generate Match Invoices', 'Generate Training Invoices', 'Update OTPI', 'Raise Card Invoice'))
 
 
     if option == 'Get New Payments':
@@ -867,7 +867,163 @@ if authentication_status:
             result=append_to_sheet_temp('OTPI Scores!A:AC', SAMPLE_SPREADSHEET_ID_input, st.session_state['to_append'])
             st.text('Data Added')
             st.dataframe(st.session_state['to_append'])
+        
+        
+    elif option == 'Raise Card Invoice':
+        client = Client(
+                access_token=get_square_secret()['SQUARE_ACCESS_TOKEN'],
+                environment='production')
+        
+        customers_api = client.customers
+        result = customers_api.list_customers(
+    
+                )
+        customers = {str(cust.get('given_name')) + ' ' + str(cust.get('family_name')):cust.get('id') for cust in result.body['customers']}
+
+
+        i=1
+        while result.cursor:
+            # print(i)
+            i+=1
+            result = customers_api.list_customers(
+                cursor = result.cursor
+            )
+            customers2 = {str(cust.get('given_name')) + ' ' + str(cust.get('family_name')):cust.get('id') for cust in result.body['customers']}
+
+            customers.update(customers2)
+        
+        customer_df=pd.DataFrame(data=[{'name':cust, 'id':customers[cust]} for cust in customers])
+        customers = list(customer_df['name'])
+        with st.form('card_form'):
+            customer = st.selectbox(
+                'Select Player: ',
+                customers
+            )
+            card = st.selectbox(
+                'Select Card: ',
+                ('Yellow','Red')
+            )
+            curr_day = dt.datetime.now().isoweekday()
+            print(curr_day)
+            diff = (curr_day+1)%7
+            print(diff)
+            last_saturday = dt.date.today()-dt.timedelta(days=diff)
+            print(last_saturday)
+            date = st.date_input(
+                'When did this happen:',
+                value = last_saturday,
+                format="DD/MM/YYYY"
+            )
+            amount = st.number_input(
+                "Fine Amount:",
+
+                min_value = 0,
+                max_value = 100
+            )
+            submitted = st.form_submit_button("Submit")
+            if submitted:
+                card_state = st.text(f'Making {card} card for {customer} for £{amount} received on {date.strftime("%d/%m/%Y")}...')
+                fine = pd.DataFrame(data=[[date.strftime('%m/%d/%Y'), f'{card} Card', customer, amount]])
+
+                SAMPLE_SPREADSHEET_ID_input = '1K_uXqI1eiguBMr0uH3Tu7xDzePAIi3uAsDrAWukyBq8'
+                append_to_sheet_temp('Player Fines', SAMPLE_SPREADSHEET_ID_input, fine)
+                if card == 'Red':
+                    catalog_id = 'XR6BOAZK2WDAQTY3TYE5OGZK'
+                else:
+                    catalog_id = '6TRZHNEXBAEOUKVPR64DXNK3'
+
+                body = {
+                    'order': {
+                        'location_id': 'SBBJSGR24YHYB',
+                        'reference_id': f'{uuid.uuid1()}',
+                        'line_items': [
+                            
+                            {
+                                'quantity': '1',
+                                'catalog_object_id': f'{catalog_id}',
+                                'base_price_money': {
+                                    'amount': amount*100,
+                                    'currency': 'GBP'
+                                }
+                            }
+                        ]
+                    },
+                    'idempotency_key': f'{uuid.uuid1()}'
+                }
+                # print(body)
+                orders_api = client.orders
+
+                result = orders_api.create_order(body)
+                print(result)
+                obj_id=result.body['order']['id']
+
+                invoices_api = client.invoices
                 
+                order_id = obj_id
+                cust_id = customer_df[customer_df['name']==customer]['id'].item()
+                invoice_number = f"fine " + str(uuid.uuid1())
+
+                due_at =  str(dt.datetime.now().date() + dt.timedelta(days = 1))
+
+                title = f'{card} recieved:' + date.strftime('%d/%m/%Y')
+
+                        
+                body = {
+                'invoice': {
+                    'location_id': 'SBBJSGR24YHYB',
+                    'order_id': f'{order_id}',
+                    'primary_recipient': {
+                        'customer_id': f'{cust_id}'
+                    },
+                    'payment_requests': [
+                        {
+                            'request_type': 'BALANCE',
+                            'due_date': due_at,
+                            'tipping_enabled': True,
+                            'automatic_payment_source': 'NONE',
+                            'reminders': [
+                                {
+                                    'relative_scheduled_days': -1,
+                                    'message': 'Your Invoice is due'
+                                }
+                            ]
+                        }
+                    ],
+                    'delivery_method': 'EMAIL',
+                    'invoice_number': invoice_number,
+                    'title': title,
+                    'description': title,
+                    'scheduled_at': due_at+'T10:00:00Z',
+                    'accepted_payment_methods': {
+                        'card': True,
+                        'square_gift_card': False,
+                        'bank_account': False,
+                        'buy_now_pay_later': False,
+                        'cash_app_pay': False
+                    },
+                    'sale_or_service_date': str(dt.datetime.now().date()),
+                    'store_payment_method_enabled': False
+                },
+                'idempotency_key': f'{uuid.uuid1()}'
+                }
+
+                result = invoices_api.create_invoice(body)
+                    # print(result)
+                invidid=result.body['invoice']['id']
+                
+                body = {
+                        'version': 0,
+                        'idempotency_key': f'{invidid}'
+                    }
+
+                result = invoices_api.publish_invoice(
+                    invidid,
+                    body
+                )
+                
+
+                card_state = st.text(f'Fine Made')
+
 
         
 elif authentication_status == False:

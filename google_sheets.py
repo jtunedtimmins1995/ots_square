@@ -83,11 +83,6 @@ def append_to_sheet(sheet_name, spreadhseet_id, df):
     
     # sheet.values_append(sheet_name, {'valueInputOption': 'RAW'}, {'values': df_values})
 
-if __name__=='__main__':
-    SAMPLE_SPREADSHEET_ID_input = '1K_uXqI1eiguBMr0uH3Tu7xDzePAIi3uAsDrAWukyBq8'
-    SAMPLE_RANGE_NAME = 'Square Subs!A:G'
-    df=get_spread_sheet(SAMPLE_SPREADSHEET_ID_input, SAMPLE_SPREADSHEET_ID_input)
-    print(df.head(1))
 
 
 def append_to_sheet_temp(SAMPLE_RANGE_NAME, SAMPLE_SPREADSHEET_ID_input, df):
