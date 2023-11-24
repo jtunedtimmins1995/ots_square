@@ -923,7 +923,7 @@ if authentication_status:
             submitted = st.form_submit_button("Submit")
             if submitted:
                 card_state = st.text(f'Making {card} card for {customer} for £{amount} received on {date.strftime("%d/%m/%Y")}...')
-                fine = pd.DataFrame(data=[[date.strftime('%m/%d/%Y'), f'{card} Card', customer, amount]])
+                fine = pd.DataFrame(data=[[date.strftime('%-m/%-d/%Y'), f'{card} Card', customer, amount]])
 
                 SAMPLE_SPREADSHEET_ID_input = '1K_uXqI1eiguBMr0uH3Tu7xDzePAIi3uAsDrAWukyBq8'
                 append_to_sheet_temp('Player Fines', SAMPLE_SPREADSHEET_ID_input, fine)
