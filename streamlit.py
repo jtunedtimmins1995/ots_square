@@ -708,78 +708,28 @@ if authentication_status:
                 st.write(skipped)
 
     elif option == 'Update OTPI':
-
-        if 'opti_state' not in st.session_state:
-            st.session_state['opti_state'] = 'opti_preparation'
-        
-        def change_mapping_dict(team):
-            if 'mapping_dict' not in st.session_state:
-                st.session_state['mapping_dict'] = {}
-            
-            st.session_state['mapping_dict'][int(team)]=st.session_state[f'mapping_{team}']
-
-        def update_comps(df):
-            df = df.copy()
-            df['OT Team']=pd.to_numeric(df['OT Team'])
-            comps_to_update = st.session_state['mapping_dict']
-            comps_df=pd.DataFrame(data=[[key, comps_to_update[key]] for key in comps_to_update], columns = ['OT Team', 'new_comp'])
-            mg=pd.merge(left=df, right=comps_df, how='left', on=['OT Team'])
-            mg.loc[mg['new_comp'].notnull(),'Competition']=mg.loc[mg['new_comp'].notnull(),'new_comp']
-
-            return mg
-        
-        def upload_button():
-            st.session_state['to_append'] = to_append
-            st.session_state['opti_state'] = 'opti_upload'
-        
         SAMPLE_SPREADSHEET_ID_input = '1lalOwWx_GwUZgjG3WgyxZvirtT9GYDJ6t3dAuNimTLM'
-        if st.session_state['opti_state'] == 'opti_preparation':
-            if 'md_sheets' not in st.session_state:
-                
-                SHEETS = ['1s Sheet!A1:AA17','2s Sheet!A1:AA17','3s Sheet!A1:AA17','4s Sheet!A1:AA17','5s Sheet!A1:AA17','6s Sheet!A1:AA17','Vets!A1:AA17']
-
-                dfs=[get_spread_sheet(SAMPLE_SPREADSHEET_ID_input, sheet) for sheet in SHEETS]
-                df = pd.concat(dfs)
-                df=df[df['Check']=='TRUE']
-                df=df[df['Position']!='']
-                st.session_state['md_sheets']=df
+        SHEETS = ['1s Sheet!A1:AA17','2s Sheet!A1:AA17','3s Sheet!A1:AA17','4s Sheet!A1:AA17','5s Sheet!A1:AA17','6s Sheet!A1:AA17','Vets!A1:AA17']
+        dfs=[get_spread_sheet(SAMPLE_SPREADSHEET_ID_input, sheet) for sheet in SHEETS]
+        df = pd.concat(dfs)
+        df=df[df['Check']=='TRUE']
+        df=df[df['Position']!='']
+        st.dataframe(df)
+        teams = list(df['OT Team'].drop_duplicates())
+        with st.form('OPTI_Form'):
+            invoice_teams = st.multiselect(
+                'What teams do you want to generate invoices for:',
+                teams,
+                teams)
             
-            else:
-                df = st.session_state['md_sheets']
 
-            st.write('These Weeks Stats:')
-            st.dataframe(df)
-
-            st.write('Team Filled In Quick Check')
-            st.dataframe(df.groupby(['OT Team'])['Position'].count())
-
-            df['Competition']=df['Competition'].apply(lambda x: 'Cup' if 'cup' in x.lower() else x)
-            comps=df[['OT Team', 'Competition']].drop_duplicates()
-
-            st.write('Comps')
-            st.dataframe(comps)
-
-            if len(df[df['Competition']==''])>0:
-                empty = df[df['Competition']=='']
-                teams = list(empty['OT Team'].drop_duplicates())
-                for i, row in comps.iterrows():
-                    team = row['OT Team']
-                    st.text_input(label=f'{team} competition', value=row['Competition'], on_change=change_mapping_dict, args=team, key=f'mapping_{team}')
-                    
-                if st.button(label = 'Update Comps'):
-                    
-                    df = update_comps(df)
-                    st.session_state['md_sheets']=df
-                    
-            
-            if len(df[df['Competition']==''])==0:
-                comps=df[['OT Team', 'Competition']].drop_duplicates()
-
-                st.write('Updated Comps')
-                st.dataframe(comps)
-
+            submitted = st.form_submit_button("Submit")
+            if submitted:
+                opti_status = st.text('Adding to OPTI...')
+                df = df[df['OT Team'].isin(invoice_teams)]
                 df['Match Date']=pd.to_datetime(df['Match Date']).apply(lambda x:x.strftime('%d %b'))
                 df['identifier']=df['Match Date']+'-'+df['OT Team'].astype(str)
+
 
                 SHEET = 'OTPI Scores!A:AC'
                 opti_db = get_spread_sheet(SAMPLE_SPREADSHEET_ID_input, SHEET)
@@ -855,18 +805,20 @@ if authentication_status:
                     ,'':''
                     }
                 to_append['Position']=to_append['Position'].apply(lambda x: position_map[x])
+                result=append_to_sheet_temp('OTPI Scores!A:AC', SAMPLE_SPREADSHEET_ID_input, to_append)
+                opti_status.text('Uploaded')
 
-                st.write('Data to Add')
-                st.dataframe(to_append)
-                # to_append['Position'].drop_duplicates()
-                # to_append[to_append['Position']=='']
-                st.button(label='Add To OPTI', on_click = upload_button)
+        #         st.write('Data to Add')
+        #         st.dataframe(to_append)
+        #         # to_append['Position'].drop_duplicates()
+        #         # to_append[to_append['Position']=='']
+        #         st.button(label='Add To OPTI', on_click = upload_button)
                     
 
-        if st.session_state['opti_state'] == 'opti_upload':
-            result=append_to_sheet_temp('OTPI Scores!A:AC', SAMPLE_SPREADSHEET_ID_input, st.session_state['to_append'])
-            st.text('Data Added')
-            st.dataframe(st.session_state['to_append'])
+        # if st.session_state['opti_state'] == 'opti_upload':
+        #     
+        #     st.text('Data Added')
+        #     st.dataframe(st.session_state['to_append'])
         
         
     elif option == 'Raise Card Invoice':
