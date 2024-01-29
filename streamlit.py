@@ -184,15 +184,17 @@ if authentication_status:
                                     new_order['last_name'] = get_value(customer.body['customer'],'family_name')
                                 except:
                                     print(customer.body)
+                        if 'line_items' in order:   
+                            for item in order['line_items']:
+                                line_dict = new_order.copy()
                                 
-                        for item in order['line_items']:
-                            line_dict = new_order.copy()
-                            
-                            line_dict['variation_name']=get_value(item,'variation_name')
-                            line_dict['item_name']=get_value(item,'name')
-                            line_dict['note']=get_value(item,'note')
-                            line_dict['total_money']=item['total_money']['amount']/100
-                            orders_format.append(line_dict) 
+                                line_dict['variation_name']=get_value(item,'variation_name')
+                                line_dict['item_name']=get_value(item,'name')
+                                line_dict['note']=get_value(item,'note')
+                                line_dict['total_money']=item['total_money']['amount']/100
+                                orders_format.append(line_dict) 
+                        else:
+                            pass
 
 
                     orders_df = pd.DataFrame(orders_format)
